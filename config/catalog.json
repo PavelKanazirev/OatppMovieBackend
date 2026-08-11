@@ -1,0 +1,23 @@
+{
+  "movies": [
+    { "id": "m1", "title": "The Christophers", "duration_minutes": 110, "language": "EN", "genre": "Drama" },
+    { "id": "m2", "title": "Autobahn",            "duration_minutes": 95,  "language": "DE", "genre": "Drama" },
+    { "id": "m3", "title": "The Odyssey",          "duration_minutes": 130, "language": "EN", "genre": "Epic poetry" }
+  ],
+
+  "theaters": [
+    { "id": "t1", "name": "Dom na kinoto", "city": "Sofia",   "seat_capacity": 20, "seats_per_row": 10 },
+    { "id": "t2", "name": "Cinema City", "city": "Plovdiv",   "seat_capacity": 30, "seats_per_row": 10 },
+    { "id": "t3", "name": "Royal Cinemas","city": "Abu Dhabi","seat_capacity": 12, "seats_per_row": 6  }
+  ],
+
+  "showtimes": [
+    { "id": "s1", "movie_id": "m1", "theater_id": "t1", "start_time": "09:00", "seat_capacity": 20, "seats_per_row": 10, "booked_seats": [] },
+    { "id": "s2", "movie_id": "m1", "theater_id": "t1", "start_time": "11:00", "seat_capacity": 20, "seats_per_row": 10, "booked_seats": ["a1", "a2"] },
+    { "id": "s3", "movie_id": "m1", "theater_id": "t2", "start_time": "13:00", "seat_capacity": 30, "seats_per_row": 10, "booked_seats": [] },
+    { "id": "s4", "movie_id": "m2", "theater_id": "t2", "start_time": "09:00", "seat_capacity": 30, "seats_per_row": 10, "booked_seats": [] },
+    { "id": "s5", "movie_id": "m3", "theater_id": "t3", "start_time": "18:00", "seat_capacity": 12, "seats_per_row": 6,  "booked_seats": ["b1"] }
+  ],
+
+  "bookings": []
+}

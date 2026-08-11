@@ -1,0 +1,77 @@
+# Doxygen configuration template.
+#
+# CMake substitutes the @VARIABLE@ placeholders (see cmake/Doxygen.cmake) and
+# writes the result to ${CMAKE_BINARY_DIR}/Doxyfile. Build the docs with:
+#
+#     cmake --build build --target docs
+#
+# The generated documentation is the "documented public API headers"
+# deliverable: everything in include/moviebackend/ is written to be read from
+# the rendered HTML, not just from the source.
+
+PROJECT_NAME           = "MovieBackend"
+PROJECT_NUMBER         = "@PROJECT_VERSION@"
+PROJECT_BRIEF          = "@PROJECT_DESCRIPTION@"
+
+OUTPUT_DIRECTORY       = @MOVIEBACKEND_DOXYGEN_OUTPUT@
+CREATE_SUBDIRS         = NO
+OUTPUT_LANGUAGE        = English
+
+INPUT                  = @MOVIEBACKEND_DOXYGEN_INPUT@
+FILE_PATTERNS          = *.hpp *.cpp *.md
+RECURSIVE              = YES
+USE_MDFILE_AS_MAINPAGE = docs/api-overview.md
+
+# We want the design commentary in the .cpp files to show up too - in this
+# project those comments are a large part of the point.
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = YES
+EXTRACT_STATIC         = YES
+EXTRACT_LOCAL_CLASSES  = YES
+
+JAVADOC_AUTOBRIEF      = YES
+QT_AUTOBRIEF           = YES
+MULTILINE_CPP_IS_BRIEF = NO
+TAB_SIZE               = 4
+MARKDOWN_SUPPORT       = YES
+AUTOLINK_SUPPORT       = YES
+
+# Warn about anything undocumented so that the docs cannot silently rot.
+QUIET                  = YES
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = YES
+WARN_IF_DOC_ERROR      = YES
+WARN_NO_PARAMDOC       = YES
+WARN_AS_ERROR          = NO
+
+GENERATE_HTML          = YES
+HTML_OUTPUT            = html
+HTML_DYNAMIC_SECTIONS  = YES
+GENERATE_TREEVIEW      = YES
+DISABLE_INDEX          = NO
+FULL_SIDEBAR           = NO
+SEARCHENGINE           = YES
+
+GENERATE_LATEX         = NO
+GENERATE_XML           = NO
+
+# Diagrams. Doxygen's built-in graphs need no extra tooling; the richer
+# PlantUML sequence diagrams live in docs/plantuml/ and are rendered by the
+# separate 'diagrams' target.
+HAVE_DOT               = NO
+COLLABORATION_GRAPH    = YES
+INCLUDE_GRAPH          = YES
+
+SOURCE_BROWSER         = YES
+INLINE_SOURCES         = NO
+REFERENCED_BY_RELATION = YES
+REFERENCES_RELATION    = YES
+
+# Do not try to document the third-party code that FetchContent drops into
+# the build tree.
+EXCLUDE_PATTERNS       = */_deps/* */build/*
+
+# The MB_LOG_* macros expand to spdlog internals that add nothing to the docs.
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = NO
+PREDEFINED             = MOVIEBACKEND_DOXYGEN

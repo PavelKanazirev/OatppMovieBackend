@@ -1,0 +1,28 @@
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8000
+  },
+
+  "theater_defaults": {
+    "seat_capacity": 20,
+    "seats_per_row": 5
+  },
+
+  "schedule": {
+    "day_start": "09:00",
+    "day_end": "21:00"
+  },
+
+  "catalog": {
+    "path": "config/catalog.json",
+    "autosave": true,
+    "autosave_debounce_ms": 500
+  },
+
+  "logging": {
+    "level": "debug",
+    "file": "",
+    "pattern": "[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] [thread %t] %v"
+  }
+}

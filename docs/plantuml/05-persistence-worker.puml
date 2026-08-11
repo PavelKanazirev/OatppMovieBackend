@@ -1,0 +1,134 @@
+@startuml 05-persistence-worker
+skinparam backgroundColor White
+skinparam shadowing false
+skinparam defaultFontName Sans
+skinparam roundCorner 6
+skinparam sequenceMessageAlign left
+skinparam ArrowColor #333333
+skinparam NoteBackgroundColor #FFFFF0
+skinparam NoteBorderColor #999999
+skinparam ParticipantBackgroundColor #F4F4F8
+skinparam ParticipantBorderColor #555555
+skinparam ClassBackgroundColor #F4F4F8
+skinparam ClassBorderColor #555555
+skinparam StateBackgroundColor #F4F4F8
+skinparam StateBorderColor #555555
+skinparam ComponentBackgroundColor #F4F4F8
+skinparam ComponentBorderColor #555555
+title PersistenceWorker\nthe mutex + condition_variable producer/consumer
+
+box "request threads (producers)" #F8F8F8
+    participant "worker thread A" as A
+    participant "worker thread B" as B
+end box
+participant "Catalog" as C
+box "PersistenceWorker" #FFF8F0
+    participant "onCatalogChanged()\n(runs on the caller's thread)" as CB
+    participant "m_condition\n(condition_variable)" as CV
+    participant "run()\n(the writer thread)" as W
+end box
+database "catalog.json" as F
+
+== Idle ==
+W -> CV : wait(lock, [] { return m_dirty || m_stopRequested; })
+activate W #LightBlue
+note right of W
+  Blocked. **Zero CPU while idle** - this is
+  the reason a condition variable is used
+  here instead of a thread that wakes every
+  N milliseconds to poll a flag.
+end note
+
+== A change arrives ==
+A -> C : bookSeats(...)
+C -> C : mutate under Catalog::m_mutex, then **unlock**
+C -> CB : onCatalogChanged()
+activate CB
+note right of CB
+  Called with **no Catalog lock held**.
+  Calling out to unknown code while holding
+  a lock is how lock inversions are born.
+end note
+CB -> CB : lock(m_mutex)\nm_dirty = true\n++m_pendingGeneration\nunlock
+CB -> CV : notify_all()
+note right of CB
+  The flag is set **under the same mutex**
+  the waiter uses, which closes the
+  lost-wakeup race: the writer cannot test
+  m_dirty between the assignment and the
+  notification.
+end note
+CB --> C : returns immediately
+deactivate CB
+C --> A : Booking
+
+== The writer wakes ==
+CV --> W : predicate is true
+
+W -> W : wait_for(lock, m_debounce,\n  [] { return m_stopRequested; })
+note right of W #FFF8E0
+  **The debounce.** A burst of edits should
+  produce one write, not one per edit.
+
+  The predicate deliberately excludes
+  m_dirty - it is already true, and
+  including it would make the wait return
+  instantly and defeat the debounce.
+  A stop request still interrupts at once.
+end note
+
+== More changes arrive during the debounce window ==
+B -> C : addMovie(...)
+C -> CB : onCatalogChanged()
+CB -> CB : m_dirty = true (already true)\n++m_pendingGeneration
+note right of CB
+  Coalesced. These two changes will be
+  written by a single save.
+end note
+
+== The debounce expires ==
+W -> W : m_dirty = false\ngenerationBeingSaved = m_pendingGeneration
+note right of W
+  The flag is cleared **before** saving,
+  not after. If a change lands while the
+  file is being written, m_dirty goes true
+  again and the loop makes another pass -
+  which is correct. Clearing it afterwards
+  would swallow that change.
+end note
+W -> W : unlock m_mutex
+
+group No lock held - snapshot and I/O
+    W -> C : snapshot()
+    activate C
+    note right of C
+      Takes the **Catalog's** lock briefly.
+      Holding PersistenceWorker::m_mutex here
+      would block every request thread that
+      wants to report a change.
+    end note
+    C --> W : CatalogSnapshot (a pure value)
+    deactivate C
+    W -> F : write catalog.json.tmp
+    W -> F : rename over catalog.json (atomic)
+end
+
+W -> W : lock, m_savedGeneration = generationBeingSaved,\n++m_saveCount, unlock
+W -> CV : notify_all()  (wakes anyone in waitForIdle)
+W -> CV : wait(...) again - back to idle
+activate W #LightBlue
+
+== Shutdown ==
+[-> W : ~PersistenceWorker()
+deactivate W
+note over W
+  1. catalog.setChangeListener(nullptr) - no new notifications
+  2. m_stopRequested = true; notify_all()
+  3. join() the thread - **never detach**: a detached thread
+     writing to a store that is being destroyed is a
+     use-after-free waiting to happen
+  4. one final save if anything is still pending, so a clean
+     shutdown never loses a booking
+end note
+
+@enduml

@@ -1,0 +1,120 @@
+@startuml 07-component-architecture
+skinparam backgroundColor White
+skinparam shadowing false
+skinparam defaultFontName Sans
+skinparam roundCorner 6
+skinparam sequenceMessageAlign left
+skinparam ArrowColor #333333
+skinparam NoteBackgroundColor #FFFFF0
+skinparam NoteBorderColor #999999
+skinparam ParticipantBackgroundColor #F4F4F8
+skinparam ParticipantBorderColor #555555
+skinparam ClassBackgroundColor #F4F4F8
+skinparam ClassBorderColor #555555
+skinparam StateBackgroundColor #F4F4F8
+skinparam StateBorderColor #555555
+skinparam ComponentBackgroundColor #F4F4F8
+skinparam ComponentBorderColor #555555
+title Component architecture\nlayers, and the direction dependencies are allowed to point
+
+skinparam componentStyle rectangle
+
+actor "End user" as User
+actor "Administrator" as Admin
+component "Python smoke tests" as Smoke
+
+package "REST / IPC layer" #FFF0F0 {
+    [PublicController] as PC
+    [AdminController] as AC
+    [DTOs + DtoMapper] as DTO
+    [RestErrorHandler] as EH
+    [RestServer\n(oatpp wiring, PIMPL)] as RS
+}
+
+package "Service layer" #F0F8FF {
+    [BookingService] as BS
+    [AdminService] as AS
+}
+
+package "Core" #F0FFF0 {
+    [Catalog\n**owns the mutex**] as CAT
+    [SeatMap] as SM
+    [Schedule] as SCH
+    [IdGenerator] as IDG
+}
+
+package "Persistence" #FFFFF0 {
+    [CatalogStore\n(interface)] as CS
+    [JsonCatalogStore\n(Boost.JSON)] as JCS
+    [PersistenceWorker\n**mutex + condition_variable**] as PW
+}
+
+package "Support" #F8F8F8 {
+    [Config] as CFG
+    [Logging\n(spdlog)] as LOG
+    [Errors\n(ServiceError)] as ERR
+}
+
+database "catalog.json" as FILE
+file "config.json" as CONF
+
+User --> PC : HTTP/JSON
+Admin --> AC : HTTP/JSON
+Smoke --> PC : HTTP/JSON
+Smoke --> AC : HTTP/JSON
+
+RS --> PC
+RS --> AC
+RS --> EH
+PC --> DTO
+AC --> DTO
+PC --> BS
+AC --> AS
+EH ..> ERR : maps ErrorCode\nto HTTP status
+
+BS --> CAT
+AS --> CAT
+AS --> CS
+
+CAT --> SM
+CAT --> IDG
+CAT ..> SCH
+AS ..> SCH
+
+PW --> CAT : observes\n(CatalogChangeListener)
+PW --> CS
+CS <|.. JCS
+JCS --> FILE
+CFG <-- CONF
+
+note right of CAT #FFE8E8
+  **The only lock in the service.**
+  One coarse std::mutex guards every
+  container. Over-booking is impossible
+  by construction rather than by
+  careful reasoning.
+end note
+
+note right of PW #FFF8E0
+  The only condition_variable.
+  A single writer thread; zero CPU
+  while idle.
+end note
+
+note bottom of DTO
+  Wire types are **separate** from domain types.
+  They change for different reasons, and their
+  representations genuinely differ (start_time is
+  "09:00" on the wire, minutes-since-midnight in
+  the domain).
+end note
+
+note as N1 #E8FFE8
+  **Dependency rule:** arrows only ever point
+  downwards. The core knows nothing about HTTP,
+  nothing about JSON, and nothing about oatpp -
+  which is why the unit tests can link the whole
+  backend without starting a server.
+end note
+
+@enduml

@@ -1,0 +1,122 @@
+@startuml 01-booking-flow
+skinparam backgroundColor White
+skinparam shadowing false
+skinparam defaultFontName Sans
+skinparam roundCorner 6
+skinparam sequenceMessageAlign left
+skinparam ArrowColor #333333
+skinparam NoteBackgroundColor #FFFFF0
+skinparam NoteBorderColor #999999
+skinparam ParticipantBackgroundColor #F4F4F8
+skinparam ParticipantBorderColor #555555
+skinparam ClassBackgroundColor #F4F4F8
+skinparam ClassBorderColor #555555
+skinparam StateBackgroundColor #F4F4F8
+skinparam StateBorderColor #555555
+skinparam ComponentBackgroundColor #F4F4F8
+skinparam ComponentBorderColor #555555
+title Booking flow, end to end\nPOST /api/v1/showtimes/{id}/bookings
+
+actor "End user" as User
+participant "HTTP client" as Client
+box "moviebackend process" #F8F8F8
+    participant "oatpp\nworker thread" as Oatpp
+    participant "PublicController" as Controller
+    participant "DtoMapper" as Mapper
+    participant "BookingService" as Service
+    participant "Catalog" as Catalog
+    participant "SeatMap" as Seats
+    participant "PersistenceWorker\n(writer thread)" as Worker
+end box
+database "catalog.json" as File
+
+User -> Client : choose seats a1, a2
+Client -> Oatpp : POST /api/v1/showtimes/s1/bookings\n{"seats":["a1","a2"],"customer_name":"Alice"}
+
+note right of Oatpp
+  **IPC BOUNDARY**
+  Everything above this line is
+  another process, talking HTTP.
+end note
+
+Oatpp -> Oatpp : parse request line,\nroute, deserialise body into\nBookingRequestDto
+Oatpp -> Controller : createBooking(showtimeId, body)
+activate Controller
+
+Controller -> Mapper : toSeatList(body)
+activate Mapper
+Mapper --> Controller : vector<SeatLabel>{"a1","a2"}
+deactivate Mapper
+note right of Mapper
+  Throws InvalidArgument if the
+  body is missing, the list is
+  empty, or a seat is repeated.
+end note
+
+Controller -> Service : bookSeats(s1, {a1,a2}, "Alice")
+activate Service
+Service -> Catalog : bookSeats(...)
+activate Catalog
+
+== CRITICAL SECTION: Catalog::m_mutex is held ==
+
+Catalog -> Catalog : lock_guard(m_mutex)
+note right of Catalog #FFE8E8
+  **This is where over-booking is
+  prevented.** Check and act happen
+  without releasing the lock, so no
+  other thread can slip between them.
+end note
+
+group Phase 1 - validate every seat (nothing is changed yet)
+    Catalog -> Seats : labelToIndex("a1") / isFree("a1")
+    Seats --> Catalog : free
+    Catalog -> Seats : labelToIndex("a2") / isFree("a2")
+    Seats --> Catalog : free
+end
+
+group Phase 2 - commit (cannot fail: all seats were just verified)
+    Catalog -> Seats : book("a1")
+    Catalog -> Seats : book("a2")
+    Catalog -> Catalog : create Booking b1,\ninsert into m_bookings
+end
+
+Catalog -> Catalog : unlock
+== end of critical section ==
+
+Catalog -> Worker : onCatalogChanged()
+note right of Worker
+  Fired **outside** the lock.
+  Sets a dirty flag and signals a
+  condition variable; returns at once.
+end note
+activate Worker
+Worker --> Catalog : (returns immediately)
+deactivate Worker
+
+Catalog --> Service : Booking b1
+deactivate Catalog
+Service --> Controller : Booking b1
+deactivate Service
+
+Controller -> Mapper : toDto(booking)
+Mapper --> Controller : BookingDto
+Controller --> Oatpp : 201 Created + BookingDto
+deactivate Controller
+
+Oatpp -> Client : HTTP 201\n{"id":"b1","seats":["a1","a2"],...}
+Client -> User : booking confirmed
+
+... debounce window elapses ...
+
+Worker -> Catalog : snapshot()
+activate Worker
+Catalog --> Worker : CatalogSnapshot (taken under the lock)
+Worker -> File : write .tmp, then rename over catalog.json
+note right of File
+  Rename is atomic, so a crash
+  mid-write cannot corrupt the file.
+end note
+deactivate Worker
+
+@enduml
