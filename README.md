@@ -5,14 +5,16 @@ Movie backend microservice using Oat++ FOSS
 
 ## Table of contents
 
-1. [What it does](#what-it-does)
-2. [Prerequisites and setup, per platform](#prerequisites-and-setup-per-platform)
-3. [Build](#build)
-4. [Run](#run)
-5. [Test](#test)
-6. [QA: Valgrind, docs, diagrams](#qa-valgrind-docs-diagrams)
-7. [Configuration](#configuration)
-8. [REST API reference](#rest-api-reference)
+1. [What it does]
+2. [Prerequisites and setup, per platform]
+3. [Build]
+4. [Run]
+5. [Test]
+6. [QA: Valgrind, docs, diagrams]
+7. [Configuration]
+8. [REST API reference]
+9. [Repository layout]
+10. [Acknowledgements]
 
 ---
 
@@ -453,3 +455,36 @@ A 110-minute film therefore gets `09:00, 11:00, 13:00, 15:00, 17:00, 19:00,
 A film ending *exactly* on the hour gets a back-to-back slot: a 120-minute film
 starting at 09:00 ends at 11:00, and the next slot is **11:00, not 12:00**.
 "A round hour after the timeline" is read as "at or after".
+---
+
+## Repository layout
+
+```
+include/moviebackend/   public API headers - the documented consumer interface
+src/core/               Catalog (the lock), SeatMap, Schedule, Config, Errors
+src/service/            BookingService, AdminService - the use cases
+src/persistence/        Boost.JSON store + the background writer thread
+src/rest/               oat++ controllers, DTOs, error handler, server wiring
+src/main.cpp            configuration, object lifetimes, signal handling
+tests/unit/             GoogleTest suite (135 tests)
+tests/smoke/            Python end-to-end tests (70 assertions)
+docs/plantuml/          10 PlantUML diagrams
+cmake/                  dependency resolution, warnings, Valgrind, Doxygen, PlantUML
+config/                 config.json and the seed catalog.json
+scripts/                the memcheck driver
+```
+
+---
+
+## Acknowledgements
+
+This project uses [Oat++](https://oatpp.io/), an open-source C++ web framework,
+to provide its REST API layer.
+
+Oat++ is developed and maintained by the
+[Oat++ contributors](https://github.com/oatpp/oatpp/graphs/contributors)
+and is licensed under the
+[Apache License 2.0](https://github.com/oatpp/oatpp/blob/master/LICENSE).
+
+The implementation and project setup were also informed by
+[<video title> — <channel name>](https://youtu.be/UzSZaeyoN-w).
