@@ -487,4 +487,4 @@ and is licensed under the
 [Apache License 2.0](https://github.com/oatpp/oatpp/blob/master/LICENSE).
 
 The implementation and project setup were also informed by
-[<video title> — <channel name>](https://youtu.be/UzSZaeyoN-w).
+[C++ Oatpp Web Framework — Ashton Bradley](https://youtu.be/UzSZaeyoN-w).
