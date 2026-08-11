@@ -1,0 +1,50 @@
+# Valgrind suppressions for the memcheck targets.
+#
+# Keep this file short and justified. Every entry suppresses a *known*
+# third-party allocation that is reachable at exit by design, never a leak in
+# our own code. If a suppression is ever needed for something in
+# moviebackend::, that is a bug to fix rather than to suppress.
+
+# ---------------------------------------------------------------------------
+# oatpp keeps its Environment (allocation counters, component registry) in
+# process-wide statics. oatpp::base::Environment::destroy() releases them, and
+# main() calls it, but the thread-local pools it uses are torn down after
+# memcheck takes its final census on some glibc versions.
+# ---------------------------------------------------------------------------
+{
+   oatpp_environment_statics
+   Memcheck:Leak
+   match-leak-kinds: reachable,possible
+   ...
+   fun:*oatpp*Environment*
+}
+
+{
+   oatpp_thread_local_pools
+   Memcheck:Leak
+   match-leak-kinds: reachable,possible
+   ...
+   fun:*oatpp*base*memory*
+}
+
+# ---------------------------------------------------------------------------
+# glibc allocates a small, permanently reachable arena for thread-local
+# storage the first time a thread is created. It is freed by the kernel at
+# process exit, never by the program.
+# ---------------------------------------------------------------------------
+{
+   glibc_dl_allocate_tls
+   Memcheck:Leak
+   match-leak-kinds: reachable,possible
+   fun:calloc
+   fun:allocate_dtv
+   fun:_dl_allocate_tls
+}
+
+{
+   glibc_pthread_create_tls
+   Memcheck:Leak
+   match-leak-kinds: reachable,possible
+   ...
+   fun:pthread_create*
+}

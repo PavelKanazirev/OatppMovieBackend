@@ -1,0 +1,141 @@
+@startuml 08-domain-model
+skinparam backgroundColor White
+skinparam shadowing false
+skinparam defaultFontName Sans
+skinparam roundCorner 6
+skinparam sequenceMessageAlign left
+skinparam ArrowColor #333333
+skinparam NoteBackgroundColor #FFFFF0
+skinparam NoteBorderColor #999999
+skinparam ParticipantBackgroundColor #F4F4F8
+skinparam ParticipantBorderColor #555555
+skinparam ClassBackgroundColor #F4F4F8
+skinparam ClassBorderColor #555555
+skinparam StateBackgroundColor #F4F4F8
+skinparam StateBorderColor #555555
+skinparam ComponentBackgroundColor #F4F4F8
+skinparam ComponentBorderColor #555555
+title Domain model\nthe value types and what actually gets booked
+
+class Movie <<value>> {
+    +MovieId id
+    +string title
+    +int durationMinutes
+    +string language
+    +string genre
+}
+
+class Theater <<value>> {
+    +TheaterId id
+    +string name
+    +string city
+    +int seatCapacity = 20
+    +int seatsPerRow = 10
+}
+
+class Showtime <<value>> {
+    +ShowtimeId id
+    +MovieId movieId
+    +TheaterId theaterId
+    +MinutesSinceMidnight startTime
+    +int seatCapacity
+    +int seatsPerRow
+}
+
+class Booking <<value>> {
+    +BookingId id
+    +ShowtimeId showtimeId
+    +vector<SeatLabel> seats
+    +string customerName
+    +int64 createdAtEpochSeconds
+}
+
+class SeatMap <<behaviour>> {
+    -int m_capacity
+    -int m_seatsPerRow
+    -vector<SeatState> m_seats
+    --
+    +labelToIndex(label) : optional<size_t>
+    +indexToLabel(index) : SeatLabel
+    +isFree(label) : bool
+    +book(label)
+    +release(label)
+    +availableSeats() : vector<SeatLabel>
+    +relayout(capacity, perRow)
+}
+
+enum SeatState {
+    Free
+    Booked
+}
+
+class Catalog <<thread-safe>> {
+    -std::mutex m_mutex
+    -map<MovieId, Movie> m_movies
+    -map<TheaterId, Theater> m_theaters
+    -map<ShowtimeId, ShowtimeRecord> m_showtimes
+    -map<BookingId, Booking> m_bookings
+    --
+    +bookSeats(...) : Booking
+    +snapshot() : CatalogSnapshot
+    +restore(snapshot)
+}
+
+class ShowtimeRecord <<internal>> {
+    +Showtime showtime
+    +SeatMap seats
+}
+
+Catalog "1" *-- "many" Movie
+Catalog "1" *-- "many" Theater
+Catalog "1" *-- "many" ShowtimeRecord
+Catalog "1" *-- "many" Booking
+
+ShowtimeRecord *-- "1" Showtime
+ShowtimeRecord *-- "1" SeatMap
+SeatMap ..> SeatState
+
+Showtime "many" --> "1" Movie : movieId
+Showtime "many" --> "1" Theater : theaterId
+Booking "many" --> "1" Showtime : showtimeId
+
+note top of Showtime #FFE8E8
+  **Showtime is the bookable unit.**
+  A Movie is global ("The Silent Protocol" is the
+  same film everywhere) and so is a Theater. What
+  gets booked is the triple (movie, theater, time),
+  and it owns its own seat map - because seat a1 at
+  09:00 has nothing to do with seat a1 at 11:00.
+
+  "Which theaters show movie X" is answered by
+  scanning showtimes rather than by a stored
+  many-to-many table, so there is only one place
+  where the truth lives and it cannot go out of sync.
+end note
+
+note right of SeatMap #FFF8E0
+  Seats are laid out row by row.
+  With seatsPerRow = 10:
+    index 0..9   -> a1 .. a10
+    index 10..19 -> b1 .. b10
+  The last row may be partial:
+  capacity 12 -> a1..a10, b1, b2.
+
+  Storage is vector<SeatState>, **not**
+  vector<bool> - the bool specialisation
+  is a proxy container and buys nothing
+  at these sizes.
+end note
+
+note bottom of Catalog #E8FFE8
+  Every getter returns a **copy**. Handing out a
+  reference into the maps would let a caller read
+  the data after the lock was released - a race
+  that compiles perfectly and fails once a month.
+
+  The value types are deliberately dumb (public
+  data, no invariants); all invariants live here,
+  next to the lock that protects them.
+end note
+
+@enduml

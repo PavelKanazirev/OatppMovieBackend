@@ -1,0 +1,148 @@
+@startuml 06-admin-schedule
+skinparam backgroundColor White
+skinparam shadowing false
+skinparam defaultFontName Sans
+skinparam roundCorner 6
+skinparam sequenceMessageAlign left
+skinparam ArrowColor #333333
+skinparam NoteBackgroundColor #FFFFF0
+skinparam NoteBorderColor #999999
+skinparam ParticipantBackgroundColor #F4F4F8
+skinparam ParticipantBorderColor #555555
+skinparam ClassBackgroundColor #F4F4F8
+skinparam ClassBorderColor #555555
+skinparam StateBackgroundColor #F4F4F8
+skinparam StateBorderColor #555555
+skinparam ComponentBackgroundColor #F4F4F8
+skinparam ComponentBorderColor #555555
+title Administrative flow\nediting the catalog and generating a default timeline
+
+actor "Special user\n(administrator)" as Admin
+participant "HTTP client" as Client
+box "moviebackend process" #F8F8F8
+    participant "AdminController" as Controller
+    participant "AdminService" as Service
+    participant "Catalog" as Catalog
+    participant "schedule::\ngenerateDefaultStartTimes" as Gen
+    participant "PersistenceWorker" as Worker
+end box
+database "catalog.json" as File
+
+== Append a theater ==
+Admin -> Client : add "Hall 3"
+Client -> Controller : POST /api/v1/admin/theaters\n{"name":"Hall 3","city":"Munich"}
+Controller -> Service : addTheater(Theater{name:"Hall 3", capacity:0})
+note right of Controller
+  capacity 0 means "use the configured
+  default", which is how the required
+  default of **20 seats** is reached
+  through the API.
+end note
+Service -> Catalog : addTheater(...)
+Catalog -> Catalog : apply defaults -> capacity 20, 10 per row\ngenerate id "t4"
+Catalog -> Worker : onCatalogChanged()
+Catalog --> Service : Theater t4
+Controller --> Client : 201 {"id":"t4","seat_capacity":20,"seats_per_row":10}
+
+== Append a movie ==
+Client -> Controller : POST /api/v1/admin/movies\n{"title":"Dune","duration_minutes":155}
+Controller -> Service : addMovie(...)
+Service -> Catalog : addMovie(...)
+Catalog --> Service : Movie m4
+Controller --> Client : 201 {"id":"m4", ...}
+
+== Generate the default timeline for that movie in that theater ==
+Admin -> Client : "schedule Dune in Hall 3"
+Client -> Controller : POST /api/v1/admin/movies/m4/theaters/t4/default-schedule
+Controller -> Service : applyDefaultSchedule("m4","t4")
+Service -> Catalog : applyDefaultSchedule("m4","t4", scheduleConfig)
+activate Catalog
+
+Catalog -> Catalog : lock_guard(m_mutex)
+note right of Catalog
+  The whole replacement is one critical
+  section, so a client can never see the
+  old screenings deleted and the new ones
+  not yet present.
+end note
+
+Catalog -> Gen : generateDefaultStartTimes(155, {09:00..21:00})
+activate Gen
+note right of Gen #FFF8E0
+  **The rule:**
+  * first screening at day_start (09:00)
+  * each next one at the first whole hour
+    **at or after** the previous one ends
+  * emit while start <= day_end (21:00)
+
+  For a 155-minute film:
+    09:00 (ends 11:35) -> 12:00
+    12:00 (ends 14:35) -> 15:00
+    15:00 -> 18:00 -> 21:00 -> stop
+end note
+Gen --> Catalog : [09:00, 12:00, 15:00, 18:00, 21:00]
+deactivate Gen
+
+Catalog -> Catalog : erase existing (m4,t4) showtimes\nand their bookings
+
+loop for each generated start time
+    alt the hall is free at that minute
+        Catalog -> Catalog : create Showtime with a fresh SeatMap\n(layout copied from theater t4)
+    else another film already occupies the slot
+        Catalog -> Catalog : skip it and log a warning
+        note right of Catalog
+          Skipping rather than failing the whole
+          call is the friendlier behaviour: the
+          administrator gets the slots that were
+          actually free, and the response is the
+          authoritative list of what was created.
+        end note
+    end
+end
+
+Catalog -> Catalog : unlock
+Catalog -> Worker : onCatalogChanged()
+Catalog --> Service : vector<Showtime>
+deactivate Catalog
+Controller --> Client : 201 [ {id:"s6",start_time:"09:00"}, ... ]
+
+== Append / modify / remove one time slot ==
+Client -> Controller : POST /api/v1/admin/movies/m4/theaters/t4/showtimes\n{"start_time":"20:00"}
+Controller -> Service : addShowtime("m4","t4", 20:00)
+Service -> Service : reject if outside the configured day
+note right of Service
+  The day window is a **service-level
+  policy**, enforced here so it stays out
+  of the locked code.
+end note
+Service -> Catalog : addShowtime(...)  (rejects a clash with 409)
+Controller --> Client : 201 {"id":"s11","start_time":"20:00"}
+
+Client -> Controller : PUT /api/v1/admin/showtimes/s11\n{"start_time":"19:00"}
+note right of Controller
+  Moving a screening **keeps its bookings** -
+  the audience keeps its seats, the film
+  just starts earlier.
+end note
+Controller --> Client : 200
+
+Client -> Controller : DELETE /api/v1/admin/showtimes/s11
+note right of Controller
+  Destructive: cancels every booking
+  made against that screening.
+end note
+Controller --> Client : 200
+
+== Force a checkpoint ==
+Client -> Controller : POST /api/v1/admin/catalog/save
+Controller -> Service : saveCatalog()
+Service -> Catalog : snapshot()
+Service -> File : save (synchronously, on this thread)
+note right of Service
+  Unlike autosave, this responds only once
+  the bytes are on disk - the administrator
+  asked for a checkpoint and is told it landed.
+end note
+Controller --> Client : 200 {"status":"saved"}
+
+@enduml

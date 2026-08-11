@@ -1,0 +1,96 @@
+@startuml 09-process-lifecycle
+skinparam backgroundColor White
+skinparam shadowing false
+skinparam defaultFontName Sans
+skinparam roundCorner 6
+skinparam sequenceMessageAlign left
+skinparam ArrowColor #333333
+skinparam NoteBackgroundColor #FFFFF0
+skinparam NoteBorderColor #999999
+skinparam ParticipantBackgroundColor #F4F4F8
+skinparam ParticipantBorderColor #555555
+skinparam ClassBackgroundColor #F4F4F8
+skinparam ClassBorderColor #555555
+skinparam StateBackgroundColor #F4F4F8
+skinparam StateBorderColor #555555
+skinparam ComponentBackgroundColor #F4F4F8
+skinparam ComponentBorderColor #555555
+title Process lifecycle\nconstruction order is the safety argument
+
+state "Start-up" as Startup {
+    state "1. Load config.json" as C1
+    state "2. Initialise logging" as C2
+    state "3. oatpp Environment::init()" as C3
+    state "4. Construct Catalog" as C4
+    state "5. Construct JsonCatalogStore" as C5
+    state "6. Load catalog from disk" as C6
+    state "7. Start PersistenceWorker" as C7
+    state "8. Construct the two services" as C8
+    state "9. Construct RestServer (binds the socket)" as C9
+    state "10. Install SIGINT / SIGTERM handlers" as C10
+
+    [*] --> C1
+    C1 --> C2
+    C2 --> C3
+    C3 --> C4
+    C4 --> C5
+    C5 --> C6
+    C6 --> C7
+    C7 --> C8
+    C8 --> C9
+    C9 --> C10
+}
+
+state "Running\n(server.start() blocks in accept())" as Running
+
+state "Shutdown" as Shutdown {
+    state "a. requestStop() - close the listening socket" as S1
+    state "b. accept loop returns" as S2
+    state "c. Uninstall signal handlers" as S3
+    state "d. waitForIdle() - flush pending changes" as S4
+    state "e. Destroy in reverse order" as S5
+    state "f. oatpp Environment::destroy()" as S6
+    state "g. shutdownLogging()" as S7
+
+    S1 --> S2
+    S2 --> S3
+    S3 --> S4
+    S4 --> S5
+    S5 --> S6
+    S6 --> S7
+}
+
+Startup --> Running : all components ready
+Running --> Shutdown : SIGINT / SIGTERM
+Shutdown --> [*] : exit 0
+
+state "Failed start-up" as Failed
+C1 --> Failed : config unreadable\nor invalid
+C6 --> Failed : catalog file is **corrupt**\n(a *missing* file is fine -\nit just means an empty catalog)
+C9 --> Failed : port already in use
+Failed --> [*] : exit 1
+
+note right of C4 #FFE8E8
+  **The Catalog is constructed first and
+  destroyed last.** Everything below holds a
+  reference to it rather than owning it, and
+  that ordering is the entire reason those
+  references are safe.
+end note
+
+note right of C7 #FFF8E0
+  The worker registers itself as the catalog's
+  change listener and starts its thread. Its
+  destructor unregisters, stops the thread,
+  joins it, and performs one final save.
+end note
+
+note right of S5 #E8FFE8
+  Destruction runs 9 -> 4: server, services,
+  worker (stops its thread and flushes), store,
+  catalog. At no point does a live object hold
+  a reference to a destroyed one - which is what
+  the memcheck target verifies.
+end note
+
+@enduml
