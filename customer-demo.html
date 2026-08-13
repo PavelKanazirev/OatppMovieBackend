@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MovieBackend — Box Office</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* ------------------------------------------------------------------
+     Token system
+     ------------------------------------------------------------------ */
+  :root {
+    --bg:          #12141c;
+    --panel:       #1a1d29;
+    --panel-2:     #21243372;
+    --line:        #2c3042;
+    --text:        #eceef4;
+    --text-muted:  #8b90a6;
+    --gold:        #e3b24d;
+    --gold-dim:    #7a6636;
+    --teal:        #46b8ad;
+    --teal-dim:    #1f4844;
+    --booked:      #454a5c;
+    --danger:      #d8674f;
+    --radius:      10px;
+    --font-display: 'Oswald', sans-serif;
+    --font-body:    'Inter', sans-serif;
+    --font-mono:    'JetBrains Mono', monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    background-image:
+      radial-gradient(ellipse 900px 500px at 15% -10%, #3a2f1a55, transparent 60%),
+      radial-gradient(ellipse 900px 500px at 100% 0%, #16323055, transparent 60%);
+    min-height: 100vh;
+  }
+
+  a { color: var(--gold); }
+
+  /* ------------------------------------------------------------------
+     Marquee header
+     ------------------------------------------------------------------ */
+  header.marquee {
+    padding: 28px clamp(16px, 4vw, 48px) 20px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  header.marquee .brand {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    font-size: clamp(22px, 3vw, 30px);
+    text-transform: uppercase;
+  }
+
+  header.marquee .brand span { color: var(--gold); }
+
+  header.marquee .tag {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+  }
+
+  /* ------------------------------------------------------------------
+     Layout
+     ------------------------------------------------------------------ */
+  main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    gap: 20px;
+    padding: 24px clamp(16px, 4vw, 48px) 48px;
+    align-items: start;
+  }
+
+  @media (max-width: 920px) {
+    main { grid-template-columns: 1fr; }
+  }
+
+  section.panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+
+  .panel + .panel { margin-top: 20px; }
+
+  h2.step {
+    font-family: var(--font-display);
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    font-size: 15px;
+    margin: 0 0 14px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  h2.step .n {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--gold-dim);
+    color: var(--gold);
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+
+  h2.step .hint {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  /* ------------------------------------------------------------------
+     Connection bar
+     ------------------------------------------------------------------ */
+  .connect-bar {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .connect-bar input {
+    flex: 1;
+    min-width: 220px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    padding: 9px 12px;
+    border-radius: 8px;
+  }
+
+  .connect-bar input:focus { outline: 1px solid var(--gold); }
+
+  button {
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: 13px;
+    border-radius: 8px;
+    border: 1px solid var(--line);
+    background: var(--panel-2);
+    color: var(--text);
+    padding: 9px 16px;
+    cursor: pointer;
+  }
+
+  button:hover { border-color: var(--gold-dim); }
+  button:focus-visible { outline: 2px solid var(--gold); outline-offset: 1px; }
+
+  button.primary {
+    background: var(--gold);
+    color: #241c08;
+    border-color: var(--gold);
+  }
+  button.primary:hover { filter: brightness(1.08); }
+
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .status-line {
+    margin-top: 10px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .status-line.ok   { color: var(--teal); }
+  .status-line.err  { color: var(--danger); }
+  .status-line .dot {
+    display: inline-block;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+    margin-right: 6px;
+  }
+
+  .demo-banner {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #e3b24d;
+    background: #3a2f1a55;
+    border: 1px solid var(--gold-dim);
+    padding: 8px 12px;
+    border-radius: 8px;
+    display: none;
+  }
+  .demo-banner.show { display: block; }
+
+  /* ------------------------------------------------------------------
+     Selection chips / breadcrumb of chosen movie -> theater -> showtime
+     ------------------------------------------------------------------ */
+  .breadcrumb {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .crumb {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    color: var(--text-muted);
+  }
+
+  .crumb.active { color: var(--gold); border-color: var(--gold-dim); }
+
+  /* ------------------------------------------------------------------
+     Cards: movies / theaters
+     ------------------------------------------------------------------ */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+  }
+
+  .card {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 14px;
+    cursor: pointer;
+    transition: border-color .15s ease, transform .1s ease;
+  }
+
+  .card:hover { border-color: var(--gold-dim); }
+  .card.selected { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; }
+
+  .card .title {
+    font-weight: 600;
+    font-size: 14.5px;
+    margin-bottom: 6px;
+  }
+
+  .card .meta {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+
+  .card .meta b { color: var(--text); font-weight: 500; }
+
+  .empty-note {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-style: italic;
+    padding: 10px 2px;
+  }
+
+  /* ------------------------------------------------------------------
+     Showtimes: day / hour / free-seats
+     ------------------------------------------------------------------ */
+  .day-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .day-row label {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+  }
+
+  .day-row select {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    padding: 6px 10px;
+    border-radius: 6px;
+  }
+
+  .showtime-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .showtime-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px 14px;
+    cursor: pointer;
+  }
+
+  .showtime-row:hover { border-color: var(--gold-dim); }
+  .showtime-row.selected { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; }
+
+  .showtime-row .hour {
+    font-family: var(--font-display);
+    font-size: 20px;
+    letter-spacing: 0.02em;
+    min-width: 64px;
+  }
+
+  .showtime-row .free-badge {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: var(--teal-dim);
+    color: var(--teal);
+    white-space: nowrap;
+  }
+
+  .showtime-row .free-badge.sold-out {
+    background: #3a2222;
+    color: var(--danger);
+  }
+
+  /* ------------------------------------------------------------------
+     Seat map
+     ------------------------------------------------------------------ */
+  .seat-legend {
+    display: flex;
+    gap: 18px;
+    margin-bottom: 14px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .seat-legend .swatch {
+    display: inline-block;
+    width: 12px; height: 12px;
+    border-radius: 3px;
+    margin-right: 6px;
+    vertical-align: -1px;
+  }
+
+  .seat-legend .swatch.free   { background: var(--teal); }
+  .seat-legend .swatch.booked { background: var(--booked); }
+
+  .screen {
+    text-align: center;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.3em;
+    color: var(--text-muted);
+    border-bottom: 2px solid var(--line);
+    padding-bottom: 10px;
+    margin-bottom: 22px;
+    border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  }
+
+  .seat-map { display: flex; flex-direction: column; gap: 7px; align-items: center; }
+
+  .seat-row { display: flex; gap: 7px; align-items: center; }
+
+  .seat-row .row-label {
+    width: 16px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: right;
+    margin-right: 3px;
+  }
+
+  .seat {
+    width: 22px;
+    height: 22px;
+    border-radius: 5px 5px 8px 8px;
+    background: var(--teal);
+    opacity: 0.9;
+    cursor: default; /* read-only: see TODO(reservation) below */
+  }
+
+  .seat.booked { background: var(--booked); }
+  .seat:hover { opacity: 1; }
+
+  .seat-caption {
+    margin-top: 16px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
+  }
+
+  /* ------------------------------------------------------------------
+     Raw response console (right column)
+     ------------------------------------------------------------------ */
+  aside.console {
+    position: sticky;
+    top: 20px;
+  }
+
+  .console h2.step { margin-bottom: 10px; }
+
+  .console-log {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    max-height: 620px;
+    overflow-y: auto;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    line-height: 1.55;
+  }
+
+  .console-entry { border-bottom: 1px solid var(--line); padding: 10px 12px; }
+  .console-entry:last-child { border-bottom: none; }
+
+  .console-entry .cmd {
+    color: var(--gold);
+    margin-bottom: 4px;
+  }
+  .console-entry .cmd .verb { color: var(--teal); }
+
+  .console-entry pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--text-muted);
+  }
+
+  .console-empty {
+    padding: 16px 12px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 12px;
+  }
+
+  footer {
+    padding: 20px clamp(16px, 4vw, 48px) 40px;
+    color: var(--text-muted);
+    font-size: 11.5px;
+    font-family: var(--font-mono);
+  }
+</style>
+</head>
+<body>
+
+<header class="marquee">
+  <div class="brand">Movie<span>Backend</span> — Box Office</div>
+  <div class="tag">read-only customer demo · browse only, no reservations</div>
+</header>
+
+<main>
+  <div>
+
+    <!-- ================================================================
+         Connection
+         ================================================================ -->
+    <section class="panel">
+      <h2 class="step"><span class="n">·</span> Server<span class="hint">GET /api/v1/movies</span></h2>
+      <div class="connect-bar">
+        <input id="apiBase" type="text" value="http://localhost:8000" spellcheck="false" />
+        <button class="primary" id="btnConnect">Load movies</button>
+      </div>
+      <div class="status-line" id="statusLine"><span class="dot"></span>not connected yet</div>
+      <div class="demo-banner" id="demoBanner">
+        Showing built-in demo data — the API above could not be reached, so this client
+        fell back to a small local sample catalog so you can still see the flow end to end.
+      </div>
+    </section>
+
+    <!-- ================================================================
+         Step 1 — Movie
+         ================================================================ -->
+    <section class="panel">
+      <h2 class="step"><span class="n">1</span> Movie</h2>
+      <div id="movieList" class="card-grid">
+        <div class="empty-note">Load movies above to get started.</div>
+      </div>
+    </section>
+
+    <!-- ================================================================
+         Step 2 — Theater
+         ================================================================ -->
+    <section class="panel">
+      <h2 class="step"><span class="n">2</span> Theater<span class="hint">GET /movies/{id}/theaters</span></h2>
+      <div id="theaterList" class="card-grid">
+        <div class="empty-note">Pick a movie first.</div>
+      </div>
+    </section>
+
+    <!-- ================================================================
+         Step 3 — Day / Hour / Free seats (showtimes)
+         ================================================================ -->
+    <section class="panel">
+      <h2 class="step"><span class="n">3</span> Showtime<span class="hint">GET .../theaters/{id}/showtimes</span></h2>
+
+      <div class="day-row">
+        <label for="daySelect">Day</label>
+        <!--
+          TODO(day-selection): the backend currently schedules a single day
+          only (see Schedule.hpp / AdminService::applyDefaultSchedule) — there
+          is no calendar date on a Showtime, only a start_time "HH:MM". Once
+          the API grows a real date field, populate this <select> from it and
+          re-fetch showtimes on change instead of the disabled placeholder
+          below.
+        -->
+        <select id="daySelect" disabled>
+          <option>Today</option>
+        </select>
+      </div>
+
+      <div id="showtimeList" class="showtime-list">
+        <div class="empty-note">Pick a theater first.</div>
+      </div>
+    </section>
+
+    <!-- ================================================================
+         Step 4 — Free seats visualisation
+         ================================================================ -->
+    <section class="panel">
+      <h2 class="step"><span class="n">4</span> Seats<span class="hint">GET /showtimes/{id}/seats</span></h2>
+
+      <div class="seat-legend">
+        <span><span class="swatch free"></span>Free</span>
+        <span><span class="swatch booked"></span>Booked</span>
+      </div>
+
+      <div class="screen" id="screenLabel"></div>
+
+      <div id="seatMap" class="seat-map">
+        <div class="empty-note">Pick a showtime to see the seat map.</div>
+      </div>
+
+      <div class="seat-caption" id="seatCaption"></div>
+
+      <!--
+        TODO(reservation): this view is intentionally read-only. To add
+        booking back in:
+          1. make .seat elements clickable (only the ones without
+             class="booked") and track a selection set
+          2. POST /api/v1/showtimes/{showtimeId}/bookings with
+             { "seats": [...], "customer_name": "..." }
+          3. handle 409 SEAT_UNAVAILABLE by re-fetching this seat map,
+             since another customer may have taken the seat first
+          4. on success, show the booking id/receipt and offer
+             GET /api/v1/bookings/{id} and DELETE /api/v1/bookings/{id}
+             (cancel) as follow-up actions
+      -->
+    </section>
+
+  </div>
+
+  <!-- ==================================================================
+       Right column — raw command / result console
+       ================================================================== -->
+  <aside class="console panel">
+    <h2 class="step">Commands<span class="hint">most recent first</span></h2>
+    <div class="console-log" id="consoleLog">
+      <div class="console-empty">Every request this page makes shows up here, in order.</div>
+    </div>
+  </aside>
+</main>
+
+<footer>
+  MovieBackend customer demo · talks to the public REST API only (no /admin routes) ·
+  seats are shown for information only, booking is out of scope for this client
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  // --------------------------------------------------------------------
+  // Tiny built-in fallback so the page is useful even with no server
+  // running. This mirrors config/catalog.json's shape closely enough for
+  // a demo, but is NOT a substitute for the real API.
+  //
+  // TODO(demo-data): delete MOCK_* and connectOrFallback()'s catch branch
+  // once this file is only ever pointed at a real, reachable backend.
+  // --------------------------------------------------------------------
+  var MOCK_MOVIES = [
+    { id: 'm1', title: 'The Christophers', duration_minutes: 110, language: 'EN', genre: 'Drama' },
+    { id: 'm2', title: 'Autobahn',         duration_minutes: 95,  language: 'DE', genre: 'Drama' },
+    { id: 'm3', title: 'The Odyssey',      duration_minutes: 130, language: 'EN', genre: 'Epic poetry' }
+  ];
+  var MOCK_THEATERS = {
+    m1: [{ id: 't1', name: 'Dom na kinoto', city: 'Sofia',    seat_capacity: 20, seats_per_row: 10 }],
+    m2: [{ id: 't2', name: 'Cinema City',   city: 'Plovdiv',  seat_capacity: 30, seats_per_row: 10 }],
+    m3: [{ id: 't3', name: 'Royal Cinemas', city: 'Abu Dhabi',seat_capacity: 12, seats_per_row: 6  }]
+  };
+  var MOCK_SHOWTIMES = {
+    't1': [
+      { id: 's1', movie_id: 'm1', theater_id: 't1', start_time: '09:00', seat_capacity: 20, available_seats: 20 },
+      { id: 's2', movie_id: 'm1', theater_id: 't1', start_time: '11:00', seat_capacity: 20, available_seats: 18 }
+    ],
+    't2': [{ id: 's4', movie_id: 'm2', theater_id: 't2', start_time: '09:00', seat_capacity: 30, available_seats: 30 }],
+    't3': [{ id: 's5', movie_id: 'm3', theater_id: 't3', start_time: '18:00', seat_capacity: 12, available_seats: 11 }]
+  };
+  var MOCK_SEATS = {
+    s1: { showtime_id: 's1', seat_capacity: 20, seats_per_row: 10, available_seats: labelRange(20, 10, []), booked_seats: [] },
+    s2: { showtime_id: 's2', seat_capacity: 20, seats_per_row: 10, available_seats: labelRange(20, 10, ['a1', 'a2']), booked_seats: ['a1', 'a2'] },
+    s4: { showtime_id: 's4', seat_capacity: 30, seats_per_row: 10, available_seats: labelRange(30, 10, []), booked_seats: [] },
+    s5: { showtime_id: 's5', seat_capacity: 12, seats_per_row: 6,  available_seats: labelRange(12, 6, ['b1']), booked_seats: ['b1'] }
+  };
+
+  function labelRange(capacity, perRow, excluded) {
+    var all = seatLabels(capacity, perRow);
+    return all.filter(function (l) { return excluded.indexOf(l) === -1; });
+  }
+
+  function seatLabels(capacity, perRow) {
+    var labels = [];
+    var row = 0, col = 1;
+    for (var i = 0; i < capacity; i++) {
+      labels.push(String.fromCharCode(97 + row) + col);
+      col++;
+      if (col > perRow) { col = 1; row++; }
+    }
+    return labels;
+  }
+
+  // --------------------------------------------------------------------
+  // Tiny API client + on-screen "console" of every command issued
+  // --------------------------------------------------------------------
+  var usingMockData = false;
+
+  function baseUrl() {
+    return document.getElementById('apiBase').value.replace(/\/+$/, '');
+  }
+
+  function logCommand(method, path, resultOrError, isError) {
+    var log = document.getElementById('consoleLog');
+    var empty = log.querySelector('.console-empty');
+    if (empty) empty.remove();
+
+    var entry = document.createElement('div');
+    entry.className = 'console-entry';
+
+    var cmd = document.createElement('div');
+    cmd.className = 'cmd';
+    cmd.innerHTML = '<span class="verb">' + method + '</span> ' + path;
+    entry.appendChild(cmd);
+
+    var pre = document.createElement('pre');
+    pre.textContent = isError
+      ? 'error: ' + resultOrError
+      : JSON.stringify(resultOrError, null, 2);
+    entry.appendChild(pre);
+
+    log.insertBefore(entry, log.firstChild);
+  }
+
+  /** GET helper. Falls back to `mockValue` (a plain value, not a fetcher)
+   *  whenever usingMockData is already true, so that after the first failed
+   *  connection every later "command" still narrates through the console. */
+  function apiGet(path, mockValue) {
+    if (usingMockData) {
+      logCommand('GET', path, mockValue, false);
+      return Promise.resolve(mockValue);
+    }
+    var url = baseUrl() + path;
+    return fetch(url, { headers: { Accept: 'application/json' } })
+      .then(function (res) {
+        return res.json().catch(function () { return null; }).then(function (body) {
+          if (!res.ok) { throw new Error(res.status + ' ' + (body && body.message ? body.message : res.statusText)); }
+          return body;
+        });
+      })
+      .then(function (body) {
+        logCommand('GET', path, body, false);
+        return body;
+      })
+      .catch(function (err) {
+        logCommand('GET', path, err.message || String(err), true);
+        throw err;
+      });
+  }
+
+  function setStatus(text, cls) {
+    var el = document.getElementById('statusLine');
+    el.className = 'status-line' + (cls ? ' ' + cls : '');
+    el.innerHTML = '<span class="dot"></span>' + text;
+  }
+
+  function showDemoBanner(show) {
+    document.getElementById('demoBanner').classList.toggle('show', !!show);
+  }
+
+  // --------------------------------------------------------------------
+  // Step 1 — movies
+  // --------------------------------------------------------------------
+  function connectOrFallback() {
+    setStatus('connecting to ' + baseUrl() + ' …');
+    usingMockData = false;
+    showDemoBanner(false);
+
+    apiGet('/api/v1/movies')
+      .then(function (movies) {
+        setStatus('connected — ' + movies.length + ' movie(s) playing', 'ok');
+        renderMovies(movies);
+      })
+      .catch(function () {
+        // No live server to talk to — fall back to the bundled sample
+        // catalog so the rest of the flow can still be demonstrated.
+        // See TODO(demo-data) above.
+        usingMockData = true;
+        setStatus('could not reach the API — showing demo data', 'err');
+        showDemoBanner(true);
+        apiGet('/api/v1/movies', MOCK_MOVIES).then(renderMovies);
+      });
+  }
+
+  function renderMovies(movies) {
+    var list = document.getElementById('movieList');
+    list.innerHTML = '';
+    if (!movies.length) {
+      list.innerHTML = '<div class="empty-note">No movies are currently playing.</div>';
+      return;
+    }
+    movies.forEach(function (movie) {
+      var card = document.createElement('div');
+      card.className = 'card';
+      card.tabIndex = 0;
+      card.innerHTML =
+        '<div class="title">' + escapeHtml(movie.title) + '</div>' +
+        '<div class="meta"><b>' + movie.duration_minutes + ' min</b> · ' +
+        escapeHtml(movie.language || '—') + ' · ' + escapeHtml(movie.genre || '—') + '</div>';
+      card.addEventListener('click', function () { selectMovie(movie, card); });
+      list.appendChild(card);
+    });
+  }
+
+  function selectMovie(movie, cardEl) {
+    Array.prototype.forEach.call(document.querySelectorAll('#movieList .card'), function (c) {
+      c.classList.remove('selected');
+    });
+    cardEl.classList.add('selected');
+
+    resetFrom('theater');
+
+    var path = '/api/v1/movies/' + encodeURIComponent(movie.id) + '/theaters';
+    var mock = MOCK_THEATERS[movie.id] || [];
+    apiGet(path, mock).then(function (theaters) {
+      renderTheaters(theaters, movie);
+    });
+  }
+
+  // --------------------------------------------------------------------
+  // Step 2 — theaters
+  // --------------------------------------------------------------------
+  function renderTheaters(theaters, movie) {
+    var list = document.getElementById('theaterList');
+    list.innerHTML = '';
+    if (!theaters.length) {
+      list.innerHTML = '<div class="empty-note">' + escapeHtml(movie.title) + ' is not showing anywhere right now.</div>';
+      return;
+    }
+    theaters.forEach(function (theater) {
+      var card = document.createElement('div');
+      card.className = 'card';
+      card.tabIndex = 0;
+      card.innerHTML =
+        '<div class="title">' + escapeHtml(theater.name) + '</div>' +
+        '<div class="meta">' + escapeHtml(theater.city || '—') + ' · <b>' +
+        theater.seat_capacity + ' seats</b></div>';
+      card.addEventListener('click', function () { selectTheater(movie, theater, card); });
+      list.appendChild(card);
+    });
+  }
+
+  function selectTheater(movie, theater, cardEl) {
+    Array.prototype.forEach.call(document.querySelectorAll('#theaterList .card'), function (c) {
+      c.classList.remove('selected');
+    });
+    cardEl.classList.add('selected');
+
+    resetFrom('showtime');
+
+    var path = '/api/v1/movies/' + encodeURIComponent(movie.id) +
+               '/theaters/' + encodeURIComponent(theater.id) + '/showtimes';
+    var mock = MOCK_SHOWTIMES[theater.id] || [];
+    apiGet(path, mock).then(renderShowtimes);
+  }
+
+  // --------------------------------------------------------------------
+  // Step 3 — showtimes (day / hour / free seats)
+  // --------------------------------------------------------------------
+  function renderShowtimes(showtimes) {
+    var list = document.getElementById('showtimeList');
+    list.innerHTML = '';
+    if (!showtimes.length) {
+      list.innerHTML = '<div class="empty-note">No screenings scheduled.</div>';
+      return;
+    }
+    showtimes.forEach(function (showtime) {
+      var free = showtime.available_seats;
+      var row = document.createElement('div');
+      row.className = 'showtime-row';
+      row.tabIndex = 0;
+      row.innerHTML =
+        '<div class="hour">' + escapeHtml(showtime.start_time) + '</div>' +
+        '<div class="meta">' + showtime.seat_capacity + ' seats total</div>' +
+        '<div class="free-badge' + (free === 0 ? ' sold-out' : '') + '">' +
+        (free === 0 ? 'sold out' : free + ' free') + '</div>';
+      row.addEventListener('click', function () { selectShowtime(showtime, row); });
+      list.appendChild(row);
+    });
+  }
+
+  function selectShowtime(showtime, rowEl) {
+    Array.prototype.forEach.call(document.querySelectorAll('#showtimeList .showtime-row'), function (r) {
+      r.classList.remove('selected');
+    });
+    rowEl.classList.add('selected');
+
+    var path = '/api/v1/showtimes/' + encodeURIComponent(showtime.id) + '/seats';
+    var mock = MOCK_SEATS[showtime.id];
+    apiGet(path, mock).then(function (seats) { renderSeatMap(seats, showtime); });
+  }
+
+  // --------------------------------------------------------------------
+  // Step 4 — seat map (read-only)
+  // --------------------------------------------------------------------
+  function renderSeatMap(seats, showtime) {
+    document.getElementById('screenLabel').textContent = 'S C R E E N — ' + showtime.start_time;
+
+    var perRow = seats.seats_per_row || 10;
+    var capacity = seats.seat_capacity;
+    var booked = seats.booked_seats || [];
+    var bookedSet = {};
+    booked.forEach(function (l) { bookedSet[l] = true; });
+
+    var labels = seatLabels(capacity, perRow);
+    var rows = {};
+    labels.forEach(function (label) {
+      var rowKey = label.replace(/[0-9]+$/, '');
+      (rows[rowKey] = rows[rowKey] || []).push(label);
+    });
+
+    var map = document.getElementById('seatMap');
+    map.innerHTML = '';
+    Object.keys(rows).sort().forEach(function (rowKey) {
+      var rowEl = document.createElement('div');
+      rowEl.className = 'seat-row';
+
+      var rowLabel = document.createElement('div');
+      rowLabel.className = 'row-label';
+      rowLabel.textContent = rowKey.toUpperCase();
+      rowEl.appendChild(rowLabel);
+
+      rows[rowKey].forEach(function (label) {
+        var seatEl = document.createElement('div');
+        seatEl.className = 'seat' + (bookedSet[label] ? ' booked' : '');
+        seatEl.title = label + ' — ' + (bookedSet[label] ? 'booked' : 'free');
+        // TODO(reservation): this is where an onclick handler for a real
+        // booking flow would attach — see the TODO block above the seat
+        // map in the HTML for the full outline.
+        rowEl.appendChild(seatEl);
+      });
+
+      map.appendChild(rowEl);
+    });
+
+    var freeCount = capacity - booked.length;
+    document.getElementById('seatCaption').textContent =
+      freeCount + ' of ' + capacity + ' seats free';
+  }
+
+  // --------------------------------------------------------------------
+  // Helpers
+  // --------------------------------------------------------------------
+  function resetFrom(step) {
+    if (step === 'theater' || step === 'showtime' || step === 'seats') {
+      document.getElementById('theaterList').innerHTML =
+        '<div class="empty-note">Pick a movie first.</div>';
+    }
+    if (step === 'showtime' || step === 'seats') {
+      document.getElementById('showtimeList').innerHTML =
+        '<div class="empty-note">Pick a theater first.</div>';
+    }
+    document.getElementById('screenLabel').textContent = '';
+    document.getElementById('seatMap').innerHTML =
+      '<div class="empty-note">Pick a showtime to see the seat map.</div>';
+    document.getElementById('seatCaption').textContent = '';
+  }
+
+  function escapeHtml(value) {
+    var div = document.createElement('div');
+    div.textContent = value == null ? '' : String(value);
+    return div.innerHTML;
+  }
+
+  // TODO(booking-lookup): a "Look up an existing booking" mini-command
+  // (GET /api/v1/bookings/{id}) would fit naturally as a fifth panel here,
+  // once the client is allowed to know about bookings made elsewhere.
+
+  // TODO(customer-identity): there is currently no concept of "the current
+  // customer" in this client — every screen is anonymous browsing. If a
+  // login/name field is added, thread it through to the (not-yet-added)
+  // booking call as customer_name.
+
+  document.getElementById('btnConnect').addEventListener('click', connectOrFallback);
+  connectOrFallback();
+})();
+</script>
+</body>
+</html>

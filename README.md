@@ -44,7 +44,7 @@ in `config/config.json` and per theater.
 
 ### WSL / Ubuntu on Windows 11
 
-Tested on Ubuntu 24.04 with GCC 14.
+Tested on Ubuntu 26.04 with GCC 15.2.
 
 ```bash
 sudo apt update
@@ -58,6 +58,8 @@ sudo apt install -y \
     valgrind \
     doxygen \
     plantuml
+#optional
+sudo apt install -y 'ninja-build'
 ```
 
 | Package | Why it is needed | If you skip it |
@@ -71,6 +73,7 @@ sudo apt install -y \
 | `valgrind` | memcheck targets | memcheck targets are not created |
 | `doxygen` | API documentation | `docs` target is not created |
 | `plantuml` | rendering the diagrams | `diagrams` target is not created; the `.puml` sources stay readable |
+| `ninja-build` | 1.10 or newer | optimised/quicker build fails
 
 Only the first three are genuinely required — everything else is either
 downloaded automatically or degrades to an optional target that is simply not
@@ -118,8 +121,8 @@ not have the compiler on its `PATH` — and work from there.
 ### WSL / Ubuntu
 
 ```bash
-git clone <repository-url> MovieBackend
-cd MovieBackend
+git clone <repository-url> OatppMovieBackend
+cd OatppMovieBackend
 
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build -j$(nproc)
@@ -169,7 +172,7 @@ generator) or `build\bin\moviebackend.exe` (Ninja).
 ---
 
 ## Run
-
+# WSL
 ```bash
 cd build/bin          # the config/ directory is copied here at build time
 ./moviebackend
@@ -189,7 +192,7 @@ The server listens on `0.0.0.0:8000` by default and prints its address:
 ```
 
 A different configuration file can be passed as the only argument:
-
+# WSL
 ```bash
 ./moviebackend /path/to/my-config.json
 ```
@@ -199,7 +202,7 @@ in-flight requests finish, and any pending catalog change is flushed to disk
 before the process exits.
 
 Quick check that it is alive:
-
+# WSL
 ```bash
 curl http://localhost:8000/api/v1/health
 curl http://localhost:8000/api/v1/movies
@@ -244,6 +247,7 @@ These start the **real** server binary and talk to it over **real HTTP**,
 covering everything the unit tests deliberately skip: request parsing, routing,
 JSON mapping, and the exception-to-status-code translation.
 
+# WSL
 ```bash
 python3 tests/smoke/run_smoke_tests.py --binary build/bin/moviebackend --source-dir .
 ```
@@ -289,24 +293,9 @@ cmake --build build --target memcheck-server   # does a real request cycle leak?
   actually run — which is the whole point. A `SIGKILL` would leave the entire
   live heap looking like a leak.
 
-Measured on Ubuntu 24.04:
-
-```
-memcheck-tests : 135/135 pass, ERROR SUMMARY: 0 errors,
-                 "All heap blocks were freed -- no leaks are possible"
-
-memcheck-server: 63 smoke assertions pass,
-                 definitely lost: 0, indirectly lost: 0, possibly lost: 0,
-                 ERROR SUMMARY: 0 errors
-```
-
-`tests/valgrind.supp` suppresses a small number of known third-party
-allocations that are reachable at exit by design (glibc TLS, oat++ statics).
-Nothing in `moviebackend::` is suppressed — if our own code ever needed a
-suppression, that would be a bug to fix rather than to hide.
-
 ### API documentation (Doxygen)
 
+# WSL
 ```bash
 cmake --build build --target docs
 ```

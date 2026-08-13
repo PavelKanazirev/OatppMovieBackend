@@ -1,0 +1,45 @@
+2Substitute the arguments in functions methods with underscore+name - checking the build: { cmake --build build -j$(nproc) }
+2Remove everything related to memcheck-server ; scripts/run_memcheck_server.sh - leave memcheck-tests.
+3Now please remove as much comments as possible. Leave only the most important ones and the Doxigen comments.
+4Can you identify which of the unit tests and smoke tests are important and pick no more than 20-25% of them - and remove all of the others.
+5Can you generate a sample customer as an html file for simple commands and result visualisation - Theater, day, movie, hour, time, free seats but without the ability to reserve seats
+6Can you generate a TKiner based unfinished Python for admin operations changing the movie names, theather names and ability to append movie to a theater but without support for hour modifications?
+
+
+Can AI generate an unfinished html as a customer for simple commands and result visualisation - Theater, day, movie, hour, time, free seats but without the ability to reserve seats
+Can AI generate a TKiner based unfinished Python for admin operations changing the movie names, theather names and ability to append movie to a theater but without support for hour modifications?
+Find places where to put FixMe
+Find places where to put ToDo
+
+
+Read and understand all of the docs here:
+C:\Users\Pavel\Documents\work\CV\OAE\Oat\OatppMovieBackend\docs\plantuml\
+Read and understand all of the usage of variables from std::condition_variable type
+Read and understand all of the usage of lambda functions well documented and searchable with the word lambda
+C:\Users\Pavel\Documents\work\CV\OAE\Oat\OatppMovieBackend\docs\plantuml\
+With the help of AI - understand the gtests logic
+With the help of AI - understand the smoketests logic
+
+Write all of this in a notebook - well indexed!
+
+Component architecture
+Start sequence!
+REST API - how?
+Interfaces - communicate with Claude:
+C:\work\git\OatppMovieBackend\docs\api-overview.md
+booking, browse flow!
+Admin sequence!
+User sequence!
+concurent booking!
+persistence worker
+Container types - maps, vector!
+Critical sections - why!
+Why is mutable std::mutex used?
+Why is std::string pattern used?
+Lambda functions - why!
+IPC protocol - why
+domain model
+seat state
+process lifecycle
+How serialization/deserialization is made?
+How is json parsed while reading and while writting?
